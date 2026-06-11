@@ -2,7 +2,7 @@
 
 import { FormEvent, useState, type ReactNode } from "react"
 import { format } from "date-fns"
-import { CalendarIcon, ChevronDownIcon } from "lucide-react"
+import { CalendarIcon, ChevronDownIcon, PencilIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
@@ -58,6 +58,7 @@ type TaskFormDialogProps = {
   task?: Task
   triggerLabel: string
   triggerIcon?: ReactNode
+  compact?: boolean
   onSubmit: (values: TaskFormValues) => Promise<Task | void>
 }
 
@@ -67,6 +68,7 @@ export function TaskFormDialog({
   task,
   triggerLabel,
   triggerIcon,
+  compact = false,
   onSubmit,
 }: TaskFormDialogProps) {
   const [open, setOpen] = useState(false)
@@ -146,9 +148,18 @@ export function TaskFormDialog({
         }
       }}
     >
-      <DialogTrigger render={<Button variant={task ? "outline" : "default"} size={task ? "sm" : "default"} />}>
-        {triggerIcon}
-        {triggerLabel}
+      <DialogTrigger
+        render={
+          <Button
+            variant={task ? "outline" : "default"}
+            size={task ? (compact ? "icon-sm" : "sm") : "default"}
+            title={task ? triggerLabel : undefined}
+            aria-label={task && compact ? triggerLabel : undefined}
+          />
+        }
+      >
+        {task && compact ? <PencilIcon /> : triggerIcon}
+        {task && compact ? null : triggerLabel}
       </DialogTrigger>
       <DialogContent className="flex max-h-[90dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
         <DialogHeader className="shrink-0 border-b px-6 py-5 pr-12">

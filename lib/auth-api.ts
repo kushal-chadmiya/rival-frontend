@@ -1,3 +1,4 @@
+import { buildAuthHeaders } from "@/lib/auth-headers"
 import type { StoredAuthSession } from "@/lib/auth-session"
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
@@ -85,13 +86,15 @@ export async function refreshSession(refreshToken: string) {
 
 export async function fetchProfile(accessToken: string) {
   const response = await fetch(`${API_BASE}/auth/me`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
+    headers: buildAuthHeaders(accessToken),
   })
   const data = (await response.json().catch(() => null)) as {
     user_id: string
     email: string
     role: string
+    actual_role?: string
     is_admin: boolean
+    can_toggle_admin?: boolean
     error?: { message?: string }
   }
   if (!response.ok) {

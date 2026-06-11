@@ -8,7 +8,20 @@ import { TaskDashboard } from "@/components/tasks/task-dashboard"
 import { useAuth } from "@/hooks/use-auth"
 
 export default function Home() {
-  const { accessToken, error, isAdmin, loading, session, signIn, signOut, signUp, user } = useAuth()
+  const {
+    accessToken,
+    canToggleAdmin,
+    error,
+    isAdmin,
+    loading,
+    session,
+    setViewRole,
+    signIn,
+    signOut,
+    signUp,
+    user,
+    viewRole,
+  } = useAuth()
   const [busy, setBusy] = useState(false)
 
   async function wrap(action: () => Promise<void>) {
@@ -35,6 +48,9 @@ export default function Home() {
         userId={user.id}
         userEmail={user.email}
         isAdmin={isAdmin}
+        canToggleAdmin={canToggleAdmin}
+        viewRole={viewRole}
+        onViewRoleChange={setViewRole}
         onSignOut={() => wrap(signOut)}
       />
     )

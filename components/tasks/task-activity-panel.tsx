@@ -50,9 +50,10 @@ const fieldChangeLabels: Record<string, string> = {
 type TaskActivityPanelProps = {
   task: Task
   accessToken: string
+  compact?: boolean
 }
 
-export function TaskActivityPanel({ task, accessToken }: TaskActivityPanelProps) {
+export function TaskActivityPanel({ task, accessToken, compact = false }: TaskActivityPanelProps) {
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState<TaskActivity[]>([])
   const [loading, setLoading] = useState(false)
@@ -91,9 +92,18 @@ export function TaskActivityPanel({ task, accessToken }: TaskActivityPanelProps)
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="outline" size="sm" />}>
-        <HistoryIcon data-icon="inline-start" />
-        <span className="sr-only sm:not-sr-only">History</span>
+      <DialogTrigger
+        render={
+          <Button
+            variant="outline"
+            size={compact ? "icon-sm" : "sm"}
+            title="Activity history"
+            aria-label="Activity history"
+          />
+        }
+      >
+        <HistoryIcon {...(compact ? {} : { "data-icon": "inline-start" })} />
+        {compact ? null : <span>History</span>}
       </DialogTrigger>
       <DialogContent className="flex max-h-[90dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
         <DialogHeader className="shrink-0 border-b px-6 py-5 pr-12">

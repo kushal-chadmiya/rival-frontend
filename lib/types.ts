@@ -61,5 +61,7 @@ export type UserProfile = {
   user_id: string
   email: string
   role: string
+  actual_role?: string
   is_admin: boolean
+  can_toggle_admin?: boolean
 }

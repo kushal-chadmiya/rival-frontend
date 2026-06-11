@@ -1,3 +1,4 @@
+import { buildAuthHeaders } from "@/lib/auth-headers"
 import type {
   Task,
   TaskActivity,
@@ -23,11 +24,10 @@ type TaskQuery = {
 async function request<T>(path: string, init: RequestInit, accessToken: string): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
-    headers: {
+    headers: buildAuthHeaders(accessToken, {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${accessToken}`,
       ...init.headers,
-    },
+    }),
   })
 
   if (!response.ok) {
@@ -127,7 +127,7 @@ export async function uploadTaskAttachment(taskId: string, file: File, accessTok
 
   const response = await fetch(`${API_BASE}/tasks/${taskId}/attachments`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${accessToken}` },
+    headers: buildAuthHeaders(accessToken),
     body: formData,
   })
 

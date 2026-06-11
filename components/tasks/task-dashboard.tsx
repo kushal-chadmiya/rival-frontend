@@ -31,6 +31,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
+import { RoleToggle } from "@/components/role-toggle"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { PriorityBadge, StatusBadge } from "@/components/tasks/task-badges"
 import { TaskActivityPanel } from "@/components/tasks/task-activity-panel"
@@ -39,12 +40,16 @@ import { TaskFormDialog } from "@/components/tasks/task-form-dialog"
 import { mergeTaskEvent, useTaskEvents } from "@/hooks/use-task-events"
 import { createTask, deleteTask, fetchTasks, markTaskComplete, priorityLabels, statusLabels, updateTask } from "@/lib/api"
 import type { Task, TaskFormValues, TaskPriority, TaskStatus } from "@/lib/types"
+import type { ViewRole } from "@/lib/view-role"
 
 type TaskDashboardProps = {
   accessToken: string
   userId: string
   userEmail: string
   isAdmin?: boolean
+  canToggleAdmin?: boolean
+  viewRole: ViewRole
+  onViewRoleChange: (role: ViewRole) => void
   onSignOut: () => Promise<void>
 }
 
@@ -77,7 +82,16 @@ function buildOptimisticTask(values: TaskFormValues, userId: string): Task {
   }
 }
 
-export function TaskDashboard({ accessToken, userId, userEmail, isAdmin = false, onSignOut }: TaskDashboardProps) {
+export function TaskDashboard({
+  accessToken,
+  userId,
+  userEmail,
+  isAdmin = false,
+  canToggleAdmin = false,
+  viewRole,
+  onViewRoleChange,
+  onSignOut,
+}: TaskDashboardProps) {
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
   const [mutating, setMutating] = useState(false)
@@ -131,13 +145,13 @@ export function TaskDashboard({ accessToken, userId, userEmail, isAdmin = false,
     return () => {
       cancelled = true
     }
-  }, [accessToken, deferredSearch, page, pageSize, sortBy, sortDir, status])
+  }, [accessToken, deferredSearch, isAdmin, page, pageSize, sortBy, sortDir, status, viewRole])
 
   const handleRealtimeEvent = useCallback((event: Parameters<typeof mergeTaskEvent>[1]) => {
     setTasks((current) => mergeTaskEvent(current, event))
   }, [])
 
-  useTaskEvents({ accessToken, onEvent: handleRealtimeEvent })
+  useTaskEvents({ accessToken, viewRole, onEvent: handleRealtimeEvent })
 
   async function refreshTasks() {
     const response = await fetchTasks(
@@ -165,7 +179,10 @@ export function TaskDashboard({ accessToken, userId, userEmail, isAdmin = false,
 
     try {
       const created = await createTask(values, accessToken)
-      setTasks((current) => current.map((task) => (task.id === optimistic.id ? created : task)))
+      setTasks((current) => [
+        created,
+        ...current.filter((task) => task.id !== optimistic.id && task.id !== created.id),
+      ])
       toast.success("Task created", { description: values.title })
       return created
     } catch (createError) {
@@ -256,6 +273,9 @@ export function TaskDashboard({ accessToken, userId, userEmail, isAdmin = false,
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
+            {canToggleAdmin ? (
+              <RoleToggle value={viewRole} onChange={onViewRoleChange} disabled={mutating} />
+            ) : null}
             {isAdmin ? (
               <Badge variant="secondary" className="hidden sm:inline-flex">
                 Admin view
@@ -410,23 +430,47 @@ export function TaskDashboard({ accessToken, userId, userEmail, isAdmin = false,
           </div>
         ) : (
           <div className="overflow-hidden rounded-lg border bg-card">
-            <div
-              className={`hidden border-b bg-muted/40 px-4 py-2.5 text-xs font-medium tracking-wide text-muted-foreground uppercase sm:grid sm:items-center sm:gap-4 ${isAdmin ? "sm:grid-cols-[minmax(0,1fr)_88px_132px_112px_auto]" : "sm:grid-cols-[minmax(0,1fr)_132px_112px_auto]"}`}
-            >
-              <span>Task</span>
-              {isAdmin ? <span>Owner</span> : null}
-              <span>Status</span>
-              <span>Priority</span>
-              <span className="text-right">Actions</span>
-            </div>
+            <table className="hidden w-full table-fixed sm:table">
+              <colgroup>
+                <col className="w-[26%]" />
+                {isAdmin ? <col className="w-[10%]" /> : null}
+                <col className="w-[12%]" />
+                <col className="w-[12%]" />
+                <col />
+              </colgroup>
+              <thead>
+                <tr className="border-b bg-muted/40 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                  <th className="px-4 py-2.5 font-medium">Task</th>
+                  {isAdmin ? <th className="px-4 py-2.5 font-medium">Owner</th> : null}
+                  <th className="px-4 py-2.5 font-medium">Status</th>
+                  <th className="px-4 py-2.5 font-medium">Priority</th>
+                  <th className="px-4 py-2.5 text-right font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {tasks.map((task) => (
+                  <TaskTableRow
+                    key={task.id}
+                    task={task}
+                    accessToken={accessToken}
+                    isAdmin={isAdmin}
+                    canModify={task.user_id === userId}
+                    mutating={mutating}
+                    onComplete={() => void handleComplete(task.id, task.title)}
+                    onDelete={() => handleDelete(task.id, task.title)}
+                    onUpdate={(values) => handleUpdate(task.id, values)}
+                  />
+                ))}
+              </tbody>
+            </table>
 
-            <div className="divide-y">
+            <div className="divide-y sm:hidden">
               {tasks.map((task) => (
-                <TaskRow
+                <TaskCardRow
                   key={task.id}
                   task={task}
                   accessToken={accessToken}
-                  isAdmin={isAdmin}
+                  canModify={task.user_id === userId}
                   mutating={mutating}
                   onComplete={() => void handleComplete(task.id, task.title)}
                   onDelete={() => handleDelete(task.id, task.title)}
@@ -470,30 +514,122 @@ export function TaskDashboard({ accessToken, userId, userEmail, isAdmin = false,
   )
 }
 
-function TaskRow({
-  task,
-  accessToken,
-  isAdmin,
-  mutating,
-  onComplete,
-  onDelete,
-  onUpdate,
-}: {
+type TaskRowProps = {
   task: Task
   accessToken: string
-  isAdmin: boolean
   mutating: boolean
   onComplete: () => void
   onDelete: () => Promise<void>
   onUpdate: (values: TaskFormValues) => Promise<void>
-}) {
+}
+
+function TaskTableRow({
+  task,
+  accessToken,
+  isAdmin,
+  canModify,
+  mutating,
+  onComplete,
+  onDelete,
+  onUpdate,
+}: TaskRowProps & { isAdmin: boolean; canModify: boolean }) {
+  const row = useTaskRowState({ onDelete })
+
+  return (
+    <>
+      <tr className="group transition-colors hover:bg-muted/30">
+        <td className="max-w-0 px-4 py-3.5 align-top">
+          <TaskSummaryButton task={task} onOpen={() => row.setDetailOpen(true)} />
+        </td>
+        {isAdmin ? (
+          <td className="px-4 py-3.5 align-middle">
+            <span className="truncate text-xs text-muted-foreground" title={task.user_id}>
+              {task.user_id.slice(0, 8)}…
+            </span>
+          </td>
+        ) : null}
+        <td className="px-4 py-3.5 align-middle whitespace-nowrap">
+          <StatusBadge status={task.status} />
+        </td>
+        <td className="px-4 py-3.5 align-middle whitespace-nowrap">
+          <PriorityBadge priority={task.priority} />
+        </td>
+        <td className="px-4 py-3.5 align-middle">
+          <TaskRowActions
+            task={task}
+            accessToken={accessToken}
+            canModify={canModify}
+            mutating={mutating}
+            deleting={row.deleting}
+            deleteOpen={row.deleteOpen}
+            onOpenDetail={() => row.setDetailOpen(true)}
+            onDeleteOpenChange={row.setDeleteOpen}
+            onConfirmDelete={row.handleConfirmDelete}
+            onComplete={onComplete}
+            onUpdate={onUpdate}
+            showLabels
+          />
+        </td>
+      </tr>
+      <TaskRowDialogs
+        task={task}
+        accessToken={accessToken}
+        detailOpen={row.detailOpen}
+        onDetailOpenChange={row.setDetailOpen}
+      />
+    </>
+  )
+}
+
+function TaskCardRow({
+  task,
+  accessToken,
+  canModify,
+  mutating,
+  onComplete,
+  onDelete,
+  onUpdate,
+}: TaskRowProps & { canModify: boolean }) {
+  const row = useTaskRowState({ onDelete })
+
+  return (
+    <>
+      <div className="px-4 py-3.5">
+        <TaskSummaryButton task={task} onOpen={() => row.setDetailOpen(true)} />
+        <div className="mt-3 flex flex-wrap gap-2">
+          <StatusBadge status={task.status} />
+          <PriorityBadge priority={task.priority} />
+        </div>
+        <div className="mt-3">
+          <TaskRowActions
+            task={task}
+            accessToken={accessToken}
+            canModify={canModify}
+            mutating={mutating}
+            deleting={row.deleting}
+            deleteOpen={row.deleteOpen}
+            onOpenDetail={() => row.setDetailOpen(true)}
+            onDeleteOpenChange={row.setDeleteOpen}
+            onConfirmDelete={row.handleConfirmDelete}
+            onComplete={onComplete}
+            onUpdate={onUpdate}
+          />
+        </div>
+      </div>
+      <TaskRowDialogs
+        task={task}
+        accessToken={accessToken}
+        detailOpen={row.detailOpen}
+        onDetailOpenChange={row.setDetailOpen}
+      />
+    </>
+  )
+}
+
+function useTaskRowState({ onDelete }: { onDelete: () => Promise<void> }) {
   const [detailOpen, setDetailOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
-
-  const gridCols = isAdmin
-    ? "sm:grid-cols-[minmax(0,1fr)_88px_132px_112px_auto]"
-    : "sm:grid-cols-[minmax(0,1fr)_132px_112px_auto]"
 
   async function handleConfirmDelete() {
     setDeleting(true)
@@ -505,79 +641,114 @@ function TaskRow({
     }
   }
 
+  return {
+    detailOpen,
+    setDetailOpen,
+    deleteOpen,
+    setDeleteOpen,
+    deleting,
+    handleConfirmDelete,
+  }
+}
+
+function TaskSummaryButton({
+  task,
+  onOpen,
+}: {
+  task: Task
+  onOpen: () => void
+}) {
   return (
-    <>
-      <div className={`group px-4 py-3.5 transition-colors hover:bg-muted/30 sm:grid sm:items-center sm:gap-4 ${gridCols}`}>
-        <button
-          type="button"
-          className="min-w-0 rounded-md text-left transition-colors hover:bg-muted/50 sm:py-1"
-          onClick={() => setDetailOpen(true)}
-        >
-          <p className="truncate font-medium group-hover:text-foreground">{task.title}</p>
-          <p className="mt-0.5 line-clamp-1 text-sm text-muted-foreground">
-            {task.description || "No description"}
-          </p>
-          <p className="mt-1.5 text-xs text-muted-foreground">
-            Due {formatDate(task.due_date)} · Created {formatDate(task.created_at)}
-          </p>
-          <div className="mt-2 flex flex-wrap gap-2 sm:hidden">
-            <StatusBadge status={task.status} />
-            <PriorityBadge priority={task.priority} />
-          </div>
-        </button>
+    <button
+      type="button"
+      className="w-full min-w-0 rounded-md text-left transition-colors hover:bg-muted/50"
+      onClick={onOpen}
+    >
+      <p className="truncate font-medium">{task.title}</p>
+      <p className="mt-0.5 line-clamp-1 text-sm text-muted-foreground">
+        {task.description || "No description"}
+      </p>
+      <p className="mt-1.5 text-xs text-muted-foreground">
+        Due {formatDate(task.due_date)} · Created {formatDate(task.created_at)}
+      </p>
+    </button>
+  )
+}
 
-        {isAdmin ? (
-          <div className="hidden truncate text-xs text-muted-foreground sm:block" title={task.user_id}>
-            {task.user_id.slice(0, 8)}…
-          </div>
-        ) : null}
+function TaskRowActions({
+  task,
+  accessToken,
+  canModify,
+  mutating,
+  deleting,
+  deleteOpen,
+  onOpenDetail,
+  onDeleteOpenChange,
+  onConfirmDelete,
+  onComplete,
+  onUpdate,
+  showLabels = false,
+}: {
+  task: Task
+  accessToken: string
+  canModify: boolean
+  mutating: boolean
+  deleting: boolean
+  deleteOpen: boolean
+  onOpenDetail: () => void
+  onDeleteOpenChange: (open: boolean) => void
+  onConfirmDelete: () => Promise<void>
+  onComplete: () => void
+  onUpdate: (values: TaskFormValues) => Promise<void>
+  showLabels?: boolean
+}) {
+  const buttonSize = showLabels ? "sm" : "icon-sm"
 
-        <div className="hidden sm:flex sm:justify-start">
-          <StatusBadge status={task.status} />
-        </div>
-
-        <div className="hidden sm:flex sm:justify-start">
-          <PriorityBadge priority={task.priority} />
-        </div>
-
-        <div className="mt-3 flex items-center justify-end gap-1 sm:mt-0">
-          <Button
-            variant="outline"
-            size="sm"
-            title="View details"
-            onClick={() => setDetailOpen(true)}
-          >
-            <EyeIcon data-icon="inline-start" />
-            <span className="sr-only sm:not-sr-only">View</span>
-          </Button>
-          <TaskActivityPanel task={task} accessToken={accessToken} />
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-1">
+      <Button
+        variant="outline"
+        size={buttonSize}
+        title="View details"
+        aria-label="View details"
+        onClick={onOpenDetail}
+      >
+        <EyeIcon {...(showLabels ? { "data-icon": "inline-start" } : {})} />
+        {showLabels ? <span>View</span> : null}
+      </Button>
+      <TaskActivityPanel task={task} accessToken={accessToken} compact={!showLabels} />
+      {canModify ? (
+        <>
           <TaskFormDialog
             busy={mutating}
             accessToken={accessToken}
             triggerLabel="Edit"
             task={task}
+            compact={!showLabels}
             onSubmit={onUpdate}
           />
           <Button
             variant="outline"
-            size="sm"
+            size={buttonSize}
             title="Mark complete"
+            aria-label="Mark complete"
             disabled={mutating || task.status === "completed"}
             onClick={onComplete}
           >
-            <CheckCheckIcon data-icon="inline-start" />
-            <span className="sr-only sm:not-sr-only">Complete</span>
+            <CheckCheckIcon {...(showLabels ? { "data-icon": "inline-start" } : {})} />
+            {showLabels ? <span>Complete</span> : null}
           </Button>
-          <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+          <AlertDialog open={deleteOpen} onOpenChange={onDeleteOpenChange}>
             <Button
               variant="destructive"
-              size="sm"
+              size={buttonSize}
               title="Delete task"
+              aria-label="Delete task"
               disabled={mutating || deleting}
-              onClick={() => setDeleteOpen(true)}
+              onClick={() => onDeleteOpenChange(true)}
             >
-              <Trash2Icon data-icon="inline-start" />
-              <span className="sr-only sm:not-sr-only">Delete</span>
+              <Trash2Icon {...(showLabels ? { "data-icon": "inline-start" } : {})} />
+              {showLabels ? <span>Delete</span> : null}
             </Button>
             <AlertDialogContent>
               <AlertDialogHeader>
@@ -591,23 +762,37 @@ function TaskRow({
                 <AlertDialogAction
                   variant="destructive"
                   disabled={deleting}
-                  onClick={() => void handleConfirmDelete()}
+                  onClick={() => void onConfirmDelete()}
                 >
                   {deleting ? "Deleting..." : "Delete task"}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
-        </div>
-      </div>
+        </>
+      ) : null}
+    </div>
+  )
+}
 
-      <TaskDetailDialog
-        task={task}
-        accessToken={accessToken}
-        open={detailOpen}
-        onOpenChange={setDetailOpen}
-      />
-    </>
+function TaskRowDialogs({
+  task,
+  accessToken,
+  detailOpen,
+  onDetailOpenChange,
+}: {
+  task: Task
+  accessToken: string
+  detailOpen: boolean
+  onDetailOpenChange: (open: boolean) => void
+}) {
+  return (
+    <TaskDetailDialog
+      task={task}
+      accessToken={accessToken}
+      open={detailOpen}
+      onOpenChange={onDetailOpenChange}
+    />
   )
 }
 
