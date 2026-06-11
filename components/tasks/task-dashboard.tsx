@@ -17,6 +17,16 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -151,13 +161,16 @@ export function TaskDashboard({ accessToken, userEmail, onSignOut }: TaskDashboa
     }
   }
 
-  async function handleComplete(taskId: string) {
+  async function handleComplete(taskId: string, title: string) {
     setMutating(true)
     setTasks((current) => current.map((task) => (task.id === taskId ? { ...task, status: "completed" } : task)))
 
     try {
       await markTaskComplete(taskId, accessToken)
       await refreshTasks()
+      toast.success("Task completed", {
+        description: title,
+      })
     } catch (completeError) {
       setError(completeError instanceof Error ? completeError.message : "Unable to complete task")
       await refreshTasks()
@@ -354,8 +367,8 @@ export function TaskDashboard({ accessToken, userEmail, onSignOut }: TaskDashboa
                   key={task.id}
                   task={task}
                   mutating={mutating}
-                  onComplete={() => void handleComplete(task.id)}
-                  onDelete={() => void handleDelete(task.id, task.title)}
+                  onComplete={() => void handleComplete(task.id, task.title)}
+                  onDelete={() => handleDelete(task.id, task.title)}
                   onUpdate={(values) => handleUpdate(task.id, values)}
                 />
               ))}
@@ -406,9 +419,22 @@ function TaskRow({
   task: Task
   mutating: boolean
   onComplete: () => void
-  onDelete: () => void
+  onDelete: () => Promise<void>
   onUpdate: (values: TaskFormValues) => Promise<void>
 }) {
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  async function handleConfirmDelete() {
+    setDeleting(true)
+    try {
+      await onDelete()
+      setDeleteOpen(false)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   return (
     <div className="group px-4 py-4 transition-colors hover:bg-muted/30 sm:grid sm:grid-cols-[1fr_148px_120px_200px] sm:items-center sm:gap-4">
       <div className="min-w-0 space-y-1">
@@ -449,10 +475,35 @@ function TaskRow({
           <CheckCheckIcon data-icon="inline-start" />
           <span className="sr-only sm:not-sr-only">Complete</span>
         </Button>
-        <Button variant="destructive" size="sm" disabled={mutating} onClick={onDelete}>
-          <Trash2Icon data-icon="inline-start" />
-          <span className="sr-only sm:not-sr-only">Delete</span>
-        </Button>
+        <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+          <Button
+            variant="destructive"
+            size="sm"
+            disabled={mutating || deleting}
+            onClick={() => setDeleteOpen(true)}
+          >
+            <Trash2Icon data-icon="inline-start" />
+            <span className="sr-only sm:not-sr-only">Delete</span>
+          </Button>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete this task?</AlertDialogTitle>
+              <AlertDialogDescription>
+                &ldquo;{task.title}&rdquo; will be permanently removed. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                variant="destructive"
+                disabled={deleting}
+                onClick={() => void handleConfirmDelete()}
+              >
+                {deleting ? "Deleting..." : "Delete task"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
 
       <p className="mt-2 hidden text-xs text-muted-foreground sm:col-span-4 sm:mt-0 sm:block">

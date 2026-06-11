@@ -5,6 +5,7 @@ import { format } from "date-fns"
 import { CalendarIcon, ChevronDownIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 import { Calendar } from "@/components/ui/calendar"
 import {
   Dialog,
@@ -260,7 +261,16 @@ export function TaskFormDialog({ busy, task, triggerLabel, triggerIcon, onSubmit
 
           <DialogFooter className="mx-0 mb-0 gap-3 rounded-b-xl border-t bg-background px-6 py-5">
             <Button type="submit" disabled={busy} className="min-w-32">
-              {busy ? "Saving..." : task ? "Save changes" : "Create task"}
+              {busy ? (
+                <>
+                  <Spinner data-icon="inline-start" />
+                  Saving...
+                </>
+              ) : task ? (
+                "Save changes"
+              ) : (
+                "Create task"
+              )}
             </Button>
           </DialogFooter>
         </form>
