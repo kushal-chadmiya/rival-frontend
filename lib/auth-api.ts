@@ -82,3 +82,20 @@ export async function refreshSession(refreshToken: string) {
   const data = await authRequest<AuthResponse>("/auth/refresh", { refresh_token: refreshToken })
   return toStoredSession(data)
 }
+
+export async function fetchProfile(accessToken: string) {
+  const response = await fetch(`${API_BASE}/auth/me`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  const data = (await response.json().catch(() => null)) as {
+    user_id: string
+    email: string
+    role: string
+    is_admin: boolean
+    error?: { message?: string }
+  }
+  if (!response.ok) {
+    throw new Error(data?.error?.message ?? "Failed to load profile")
+  }
+  return data
+}

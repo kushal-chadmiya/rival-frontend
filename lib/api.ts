@@ -1,6 +1,15 @@
-import type { Task, TaskFormValues, TaskListResponse, TaskPriority, TaskStatus } from "@/lib/types"
+import type {
+  Task,
+  TaskActivity,
+  TaskAttachment,
+  TaskFormValues,
+  TaskListResponse,
+  TaskPriority,
+  TaskStatus,
+  UserProfile,
+} from "@/lib/types"
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
 
 type TaskQuery = {
   status: TaskStatus | "all"
@@ -92,6 +101,46 @@ export async function deleteTask(taskId: string, accessToken: string) {
 
 export async function markTaskComplete(taskId: string, accessToken: string) {
   return updateTask(taskId, { status: "completed" }, accessToken)
+}
+
+export async function fetchMe(accessToken: string) {
+  return request<UserProfile>("/auth/me", { method: "GET" }, accessToken)
+}
+
+export async function fetchTaskActivity(taskId: string, accessToken: string) {
+  const data = await request<{ items: TaskActivity[] }>(`/tasks/${taskId}/activity`, { method: "GET" }, accessToken)
+  return data.items
+}
+
+export async function fetchTaskAttachments(taskId: string, accessToken: string) {
+  const data = await request<{ items: TaskAttachment[] }>(
+    `/tasks/${taskId}/attachments`,
+    { method: "GET" },
+    accessToken,
+  )
+  return data.items
+}
+
+export async function uploadTaskAttachment(taskId: string, file: File, accessToken: string) {
+  const formData = new FormData()
+  formData.append("file", file)
+
+  const response = await fetch(`${API_BASE}/tasks/${taskId}/attachments`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: formData,
+  })
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => null)
+    throw new Error(data?.error?.message ?? "Upload failed")
+  }
+
+  return response.json() as Promise<TaskAttachment>
+}
+
+export async function deleteTaskAttachment(taskId: string, attachmentId: string, accessToken: string) {
+  return request<void>(`/tasks/${taskId}/attachments/${attachmentId}`, { method: "DELETE" }, accessToken)
 }
 
 export const sortLabels: Record<TaskQuery["sortBy"], string> = {

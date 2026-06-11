@@ -8,7 +8,7 @@ import { TaskDashboard } from "@/components/tasks/task-dashboard"
 import { useAuth } from "@/hooks/use-auth"
 
 export default function Home() {
-  const { accessToken, error, loading, session, signIn, signOut, signUp, user } = useAuth()
+  const { accessToken, error, isAdmin, loading, session, signIn, signOut, signUp, user } = useAuth()
   const [busy, setBusy] = useState(false)
 
   async function wrap(action: () => Promise<void>) {
@@ -32,7 +32,9 @@ export default function Home() {
     return (
       <TaskDashboard
         accessToken={accessToken}
+        userId={user.id}
         userEmail={user.email}
+        isAdmin={isAdmin}
         onSignOut={() => wrap(signOut)}
       />
     )

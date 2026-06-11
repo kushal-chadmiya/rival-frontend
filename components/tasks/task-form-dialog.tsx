@@ -28,7 +28,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { priorityLabels, statusLabels } from "@/lib/api"
+import { TaskFormAttachments } from "@/components/tasks/task-form-attachments"
+import { priorityLabels, statusLabels, uploadTaskAttachment } from "@/lib/api"
 import type { Task, TaskFormValues, TaskPriority, TaskStatus } from "@/lib/types"
 
 const statusItems = [
@@ -53,17 +54,26 @@ const initialValues: TaskFormValues = {
 
 type TaskFormDialogProps = {
   busy: boolean
+  accessToken: string
   task?: Task
   triggerLabel: string
   triggerIcon?: ReactNode
-  onSubmit: (values: TaskFormValues) => Promise<void>
+  onSubmit: (values: TaskFormValues) => Promise<Task | void>
 }
 
-export function TaskFormDialog({ busy, task, triggerLabel, triggerIcon, onSubmit }: TaskFormDialogProps) {
+export function TaskFormDialog({
+  busy,
+  accessToken,
+  task,
+  triggerLabel,
+  triggerIcon,
+  onSubmit,
+}: TaskFormDialogProps) {
   const [open, setOpen] = useState(false)
   const [values, setValues] = useState<TaskFormValues>(() => taskToFormValues(task))
   const [dueDate, setDueDate] = useState<Date | undefined>(() => parseDueDate(taskToFormValues(task).dueDate).date)
   const [dueTime, setDueTime] = useState(() => parseDueDate(taskToFormValues(task).dueDate).time)
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const [calendarOpen, setCalendarOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -91,7 +101,16 @@ export function TaskFormDialog({ busy, task, triggerLabel, triggerIcon, onSubmit
     setError(null)
 
     try {
-      await onSubmit(values)
+      const savedTask = await onSubmit(values)
+      const taskId = savedTask?.id ?? task?.id
+
+      if (taskId && pendingFiles.length > 0) {
+        for (const file of pendingFiles) {
+          await uploadTaskAttachment(taskId, file, accessToken)
+        }
+      }
+
+      setPendingFiles([])
       setOpen(false)
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Unable to save task")
@@ -109,6 +128,7 @@ export function TaskFormDialog({ busy, task, triggerLabel, triggerIcon, onSubmit
     setValues(nextValues)
     setDueDate(parsedDueDate.date)
     setDueTime(parsedDueDate.time)
+    setPendingFiles([])
     setError(null)
     setCalendarOpen(false)
   }
@@ -256,6 +276,14 @@ export function TaskFormDialog({ busy, task, triggerLabel, triggerIcon, onSubmit
                 />
               </Field>
             </FieldGroup>
+
+            <TaskFormAttachments
+              accessToken={accessToken}
+              taskId={task?.id}
+              disabled={busy}
+              pendingFiles={pendingFiles}
+              onPendingFilesChange={setPendingFiles}
+            />
 
             {error ? <FieldError>{error}</FieldError> : null}
           </div>

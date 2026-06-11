@@ -12,8 +12,18 @@ type Credentials = {
 
 export function useAuth() {
   const [session, setSession] = useState<StoredAuthSession | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  async function loadProfile(accessToken: string) {
+    try {
+      const profile = await authApi.fetchProfile(accessToken)
+      setIsAdmin(profile.is_admin)
+    } catch {
+      setIsAdmin(false)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -27,29 +37,26 @@ export function useAuth() {
         return
       }
 
-      if (stored.expiresAt > Date.now() + 60_000) {
-        if (!cancelled) {
-          setSession(stored)
-          setLoading(false)
+      let active = stored
+      if (stored.expiresAt <= Date.now() + 60_000) {
+        try {
+          active = await authApi.refreshSession(stored.refreshToken)
+          saveAuthSession(active)
+        } catch {
+          clearAuthSession()
+          if (!cancelled) {
+            setSession(null)
+            setIsAdmin(false)
+            setLoading(false)
+          }
+          return
         }
-        return
       }
 
-      try {
-        const refreshed = await authApi.refreshSession(stored.refreshToken)
-        saveAuthSession(refreshed)
-        if (!cancelled) {
-          setSession(refreshed)
-        }
-      } catch {
-        clearAuthSession()
-        if (!cancelled) {
-          setSession(null)
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
+      if (!cancelled) {
+        setSession(active)
+        await loadProfile(active.accessToken)
+        setLoading(false)
       }
     }
 
@@ -64,6 +71,7 @@ export function useAuth() {
     const nextSession = await authApi.login(credentials)
     saveAuthSession(nextSession)
     setSession(nextSession)
+    await loadProfile(nextSession.accessToken)
     setError(null)
   }
 
@@ -71,12 +79,14 @@ export function useAuth() {
     const nextSession = await authApi.signup(credentials)
     saveAuthSession(nextSession)
     setSession(nextSession)
+    await loadProfile(nextSession.accessToken)
     setError(null)
   }
 
   async function signOut() {
     clearAuthSession()
     setSession(null)
+    setIsAdmin(false)
   }
 
   return {
@@ -84,6 +94,7 @@ export function useAuth() {
     user: session?.user ?? null,
     loading,
     error,
+    isAdmin,
     accessToken: session?.accessToken ?? null,
     signIn,
     signUp,
