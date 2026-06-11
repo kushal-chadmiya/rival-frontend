@@ -130,16 +130,16 @@ export function TaskFormDialog({ busy, task, triggerLabel, triggerIcon, onSubmit
         {triggerIcon}
         {triggerLabel}
       </DialogTrigger>
-      <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-2xl">
-        <DialogHeader className="border-b px-6 py-5 pr-12">
+      <DialogContent className="flex max-h-[90dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+        <DialogHeader className="shrink-0 border-b px-6 py-5 pr-12">
           <DialogTitle className="text-xl">{task ? "Edit task" : "New task"}</DialogTitle>
           <DialogDescription>
             {task ? "Update the details below." : "Add a title, due date, and optional details."}
           </DialogDescription>
         </DialogHeader>
 
-        <form className="flex flex-col" onSubmit={handleSubmit}>
-          <div className="flex flex-col gap-6 px-6 py-6">
+        <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
+          <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-6">
             <FieldGroup className="gap-5">
               <Field data-invalid={Boolean(error && !values.title.trim())}>
                 <FieldLabel htmlFor="task-title">Title</FieldLabel>
@@ -155,6 +155,7 @@ export function TaskFormDialog({ busy, task, triggerLabel, triggerIcon, onSubmit
                 <Textarea
                   id="task-description"
                   rows={4}
+                  className="max-h-40 min-h-24 resize-y"
                   value={values.description}
                   onChange={(event) => updateField("description", event.target.value)}
                 />
@@ -259,7 +260,7 @@ export function TaskFormDialog({ busy, task, triggerLabel, triggerIcon, onSubmit
             {error ? <FieldError>{error}</FieldError> : null}
           </div>
 
-          <DialogFooter className="mx-0 mb-0 gap-3 rounded-b-xl border-t bg-background px-6 py-5">
+          <DialogFooter className="mx-0 mb-0 shrink-0 gap-3 rounded-b-xl border-t bg-background px-6 py-5">
             <Button type="submit" disabled={busy} className="min-w-32">
               {busy ? (
                 <>
